@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  chatbot:
+    build: .
+    container_name: ai-chatbot-engine
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MODEL=gpt-4
+    volumes:
+      - chatbot_data:/app/data
+    networks:
+      - chatbot_network
+
+volumes:
+  chatbot_data:
+
+networks:
+  chatbot_network:
+    driver: bridge
