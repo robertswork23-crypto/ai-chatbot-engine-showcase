@@ -1,22 +1,38 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-chatbot-engine-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=chatbot
+      - POSTGRES_PASSWORD=chatbot
+      - POSTGRES_DB=ai_chatbot_engine
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - chatbot_network
+
   chatbot:
     build: .
     container_name: ai-chatbot-engine
     restart: always
+    depends_on:
+      - postgres
     ports:
-      - "3000:3000"
+      - "8000:8000"
     environment:
-      - NODE_ENV=production
-      - MODEL=gpt-4
-    volumes:
-      - chatbot_data:/app/data
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://chatbot:chatbot@postgres:5432/ai_chatbot_engine
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     networks:
       - chatbot_network
 
 volumes:
-  chatbot_data:
+  pg_data:
 
 networks:
   chatbot_network:
