@@ -4,15 +4,26 @@ Embeddings are stored as a portable JSON list[float] column rather than a
 Postgres-only `vector` column, so the same schema/code path works identically
 on local SQLite and production Postgres — similarity search runs in Python
 (numpy) over the small seeded corpus rather than as a SQL operator.
+
+Production Postgres is shared across multiple Nivor apps on the same Railway
+project (cost-minimizing — see the deploy plan). Each app therefore gets its
+own Postgres *schema* (`chatbot_engine` here) rather than living in the
+default `public` schema — otherwise a generic table name like `users` collides
+across apps and `create_all()` silently skips the "existing" table, leaving
+this app's extra columns missing (this happened once against full-stack-ai-app's
+own `public.users` table; fixed by isolating schemas instead of sharing one).
+SQLite has no schema concept, so this only applies against Postgres/production.
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, MetaData, String, Text, create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from .config import config
 
-Base = declarative_base()
+SCHEMA_NAME = "chatbot_engine"
+_metadata = MetaData(schema=SCHEMA_NAME) if config.is_production else MetaData()
+Base = declarative_base(metadata=_metadata)
 
 
 class Document(Base):
@@ -72,6 +83,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
 
 def init_db():
+    if config.is_production:
+        with _engine.connect() as conn:
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME}"))
+            conn.commit()
     Base.metadata.create_all(bind=_engine)
 
 
