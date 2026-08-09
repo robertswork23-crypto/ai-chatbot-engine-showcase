@@ -5,7 +5,7 @@ resends).
 import logging
 import os
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 import openai
 from openai import AsyncOpenAI
@@ -25,10 +25,9 @@ logger = logging.getLogger(__name__)
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 MODEL = "gpt-5.6-luna"
 
-SYSTEM_PROMPT = """You are the AI Chatbot Engine demo assistant — a RAG-powered support
-chatbot template. Answer using the CONTEXT block below when it's relevant to the
-question; if the context doesn't cover it, answer from general knowledge and say so.
-Be concise and helpful. Be upfront that this is a demo instance if asked."""
+SYSTEM_PROMPT = """You are Nivor Chat Assistant — a RAG-powered AI assistant. Answer using
+the CONTEXT block below when it's relevant to the question; if the context doesn't cover
+it, answer from general knowledge and say so. Be concise and helpful."""
 
 TOP_K = 3
 
@@ -57,7 +56,7 @@ async def _retrieve_context(db: Session, message: str) -> str:
     return "\n\n".join(f"- {c}" for c in top)
 
 
-async def get_chat_reply(db: Session, session_id: str, message: str) -> str:
+async def get_chat_reply(db: Session, session_id: str, message: str, user_id: Optional[int] = None) -> str:
     if LLM_PROVIDER != "openai":
         raise NotImplementedError(
             f"LLM_PROVIDER={LLM_PROVIDER!r} is not implemented in this template — only 'openai' is wired up."
@@ -68,9 +67,12 @@ async def get_chat_reply(db: Session, session_id: str, message: str) -> str:
         logger.warning("Chat requested but OPENAI_API_KEY is not set")
         return "Chat isn't configured yet on this deployment — add an OPENAI_API_KEY to enable it."
 
+    # Signed-in users get memory keyed by account (works across devices/sessions);
+    # anonymous demo chat stays keyed by the browser-generated session_id.
+    history_filter = Message.user_id == user_id if user_id is not None else Message.session_id == session_id
     history: List[Message] = (
         db.query(Message)
-        .filter(Message.session_id == session_id)
+        .filter(history_filter)
         .order_by(Message.created_at.asc())
         .limit(20)
         .all()
@@ -103,8 +105,8 @@ async def get_chat_reply(db: Session, session_id: str, message: str) -> str:
 
     reply = (response.output_text or "").strip() or "I don't have a good answer for that one — try rephrasing?"
 
-    db.add(Message(session_id=session_id, role="user", content=message, created_at=datetime.utcnow()))
-    db.add(Message(session_id=session_id, role="assistant", content=reply, created_at=datetime.utcnow()))
+    db.add(Message(session_id=session_id, user_id=user_id, role="user", content=message, created_at=datetime.utcnow()))
+    db.add(Message(session_id=session_id, user_id=user_id, role="assistant", content=reply, created_at=datetime.utcnow()))
     db.commit()
 
     return reply

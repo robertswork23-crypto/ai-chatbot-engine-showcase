@@ -28,6 +28,10 @@ services:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql://chatbot:chatbot@postgres:5432/ai_chatbot_engine
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:-}
     networks:
       - chatbot_network
 
